@@ -36,7 +36,10 @@ import platypus
 # Parallel processing imports
 from schwimmbad import MultiPool as sch_MultiPool
 from schwimmbad import MPIPool as sch_MPIPool
-from mpi4py import MPI
+try:
+    from mpi4py import MPI
+except (ImportError, RuntimeError):
+    MPI = None
 import multiprocessing
 
 
@@ -736,6 +739,8 @@ class FFParam(object):
             self.pool_type = 'multi'
             return sch_MultiPool()
         elif pool_type == 'mpi':
+            if MPI is None:
+                raise RuntimeError('MPI is unavailable; install an MPI runtime to use the mpi pool.')
             self.pool_type = 'mpi'
             return sch_MPIPool()
 
@@ -790,4 +795,4 @@ def get_pool_rank():
         myrank = multiprocessing.current_process()._identity[0]
         return myrank                     # return rank of multiprocessing process, if available
     except:
-        return MPI.COMM_WORLD.Get_rank()  # return rank of MPI process, or 0 if there is no MPI
+        return MPI.COMM_WORLD.Get_rank() if MPI is not None else 0
