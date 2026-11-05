@@ -21,6 +21,9 @@ python setup.py install
 ## Documentation
 Code documentation and examples can be found at [ezff.readthedocs.io](https://ezff.readthedocs.io/en/latest/)
 
+## LAMMPS on Windows
+Install a Windows LAMMPS build with ReaxFF support, then set `EZFF_LAMMPS_COMMAND` to the full path of `lmp.exe`. Restart your terminal or IDE after setting the user environment variable. EZFF's LAMMPS interface also accepts an explicit executable path through `job.run(command=...)` and the related `run_static`, `run_relax`, and `run_elastic` methods.
+
 ## Requirements
 Uses [xtal](https://github.com/USCCACS/xtal) for handling atomic structures and trajectories.
 Multi-objective optimization is implemented through [Platypus](https://github.com/Project-Platypus/Platypus).

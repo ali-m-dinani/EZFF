@@ -90,6 +90,10 @@ celerybeat-schedule
 # Environments
 .env
 .venv
+.idea/
+.vscode/
+/results/
+examples/reaxff-charge-gulp-serial/smoke-lammps-output/
 env/
 venv/
 ENV/

@@ -638,7 +638,7 @@ class FFParam(object):
     def _write_out_forcefields(self):
         print('Epoch: '+ str(self.total_epochs))
 
-        if not (self.algo_string.upper() == 'RANDOMSEARCH_SO'):
+        if self.variables:
             # Make output files/directories
             outdir = 'results/' + str(self.total_epochs)
             if not os.path.isdir(outdir):
@@ -669,7 +669,7 @@ class FFParam(object):
             all_evaluated_filename = outdir + '/all_evaluated_'
             self.save_evaluated(all_evaluated_filename)
 
-            if self.total_epochs % 5 == 0:
+            if len(reco_vars) > 0:
                 if not os.path.isdir(outdir+'/forcefields'):
                     os.makedirs(outdir+'/forcefields')
                 for reco_id, reco_var in enumerate(reco_vars):
@@ -693,9 +693,9 @@ class FFParam(object):
             best_variables = self.variables
             best_errors = self.errors
         elif self.algo_framework == 'nevergrad':
-            best_recommendation = self.algorithm.provide_recommendation()
-            best_variables = best_recommendation.value
-            best_errors = best_recommendation.loss
+            best_index = min(range(len(self.errors)), key=lambda index: self.errors[index][0])
+            best_variables = dict(zip(self.variable_names, self.variables[best_index]))
+            best_errors = self.errors[best_index][0]
         elif self.algo_framework == 'mobopt':
             best_errors, best_variables = self.algorithm.space.ParetoSet()
         elif self.algo_framework == 'pymoo':

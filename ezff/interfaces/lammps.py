@@ -1,15 +1,13 @@
 """Interface to LAMMPS, the Large-scale Atomic/Molecular Massively Parallel Simulator"""
 import os
+import shutil
+import subprocess
 import xtal
 import numpy as np
 import ezff
 from ezff.ffio import generate_forcefield as gen_ff
 from ezff.utils import convert_units as convert
 from ezff.utils import atomic_properties
-import distutils
-from distutils import spawn
-
-
 class job:
     """
     Class representing a LAMMPS calculation
@@ -115,33 +113,32 @@ class job:
 
 
     def _pre_job_cleanup(self):
-        os.system('cd '+ self.path + ' ; rm -f ' + self.outfile)
+        for filename in (self.outfile, self.dumpfile):
+            if os.path.exists(filename):
+                os.remove(filename)
 
 
     def _run_loop(self, command = None, timeout = None):
-        outfile_single_snapshot = self.outfile + '_temp'
-
-        system_call_command = command + ' -in ' + self.scriptfile + ' > ' + outfile_single_snapshot + ' 2> ' + self.outfile + '.runerror'
-
-        if timeout is not None:
-            system_call_command = 'timeout ' + str(timeout) + ' ' + system_call_command
-
+        executable = command or os.environ.get('EZFF_LAMMPS_COMMAND') or shutil.which('lmp_serial') or shutil.which('lmp')
+        if executable is None:
+            raise FileNotFoundError('LAMMPS executable not found; pass command or set EZFF_LAMMPS_COMMAND')
         if self.verbose:
-            print('cd '+ self.path + ' ; ' + system_call_command)
-        os.system('cd '+ self.path + ' ; ' + system_call_command)
-
-        # Append output to the job outfile and structure to job structurefile
-        os.system('cat ' + outfile_single_snapshot + ' >> ' + self.outfile)
-        os.system('cat ' + os.path.join(os.path.abspath(self.path), 'tempdumpfile') + ' >> ' + self.dumpfile)
-        os.system('rm -f ' + os.path.join(os.path.abspath(self.path), 'tempdumpfile'))
-        os.system('rm -f ' + outfile_single_snapshot)
+            print('Running LAMMPS:', executable, self.scriptfile)
+        error_file = self.outfile + '.runerror'
+        with open(self.outfile, 'ab') as output, open(error_file, 'wb') as errors:
+            subprocess.run([executable, '-in', self.scriptfile], cwd=self.path,
+                           stdout=output, stderr=errors, timeout=timeout, check=True)
+        temporary_dump = os.path.join(os.path.abspath(self.path), 'tempdumpfile')
+        with open(temporary_dump, 'rb') as source, open(self.dumpfile, 'ab') as destination:
+            shutil.copyfileobj(source, destination)
+        os.remove(temporary_dump)
 
 
     def _post_job_cleanup(self):
         files_to_be_removed = [self.outfile+'.disp', self.outfile+'.dens', self.outfile+'.runerror']
         for file_to_be_removed in files_to_be_removed:
-            abs_file_to_be_removed = os.path.join(os.path.abspath(self.path), file_to_be_removed)
-            os.system('cd '+ self.path + ' ; rm -f ' + abs_file_to_be_removed)
+            if os.path.exists(file_to_be_removed):
+                os.remove(file_to_be_removed)
 
 
 
@@ -156,37 +153,12 @@ class job:
         :param timeout: LAMMPS job is automatically killed after ``timeout`` seconds
         :type timeout: int
         """
-        if command is None:
-            # Attempt to locate a `gulp` executable
-            lmpexec = distutils.spawn.find_executable('lmp_serial')
-            if lmpexec is not None:
-                print('Located LAMMPS executable at ' + lmpexec)
-                command = lmpexec
-            else:
-                print('No LAMMPS executable specified or located')
-
-        ## Purge existing result files
-        os.system('cd '+ self.path + ' ; rm ' + self.outfile)
-
-        outfile_single_snapshot = self.outfile + '_temp'
-
+        self._pre_job_cleanup()
         for snapID, snapshot in enumerate(self.structure.snaplist):
             self._write_structure_file(snapID)
             self._write_script_file()
-
-            system_call_command = command + ' -in ' + self.scriptfile + ' > ' + outfile_single_snapshot + ' 2> ' + self.outfile + '.runerror'
-
-            if timeout is not None:
-                system_call_command = 'timeout ' + str(timeout) + ' ' + system_call_command
-
-            if self.verbose:
-                print('cd '+ self.path + ' ; ' + system_call_command)
-            os.system('cd '+ self.path + ' ; ' + system_call_command)
-
-            # Append output to the job outfile and structure to job structurefile
-            os.system('cat ' + outfile_single_snapshot + ' >> ' + self.outfile)
-            os.system('cat ' + os.path.join(os.path.abspath(self.path), 'tempdumpfile') + ' >> ' + self.dumpfile)
-            os.system('rm -f tempdumpfile')
+            self._run_loop(command=command, timeout=timeout)
+        self._post_job_cleanup()
 
 
     def _write_structure_file(self, snap_ID):
@@ -290,7 +262,7 @@ class job:
     def _include_forcefield(self, fftype):
         # Convert FFtype to pair_style
         fftype_pairstyle = {'SW': 'sw', 'STILLINGER-WEBER': 'sw', 'STILLINGER WEBER': 'sw',
-                            'REAX': 'reax/c NULL', 'REAXFF': 'reax/c NULL', 'REAX/C': 'reax/c NULL',
+                            'REAX': 'reaxff NULL', 'REAXFF': 'reaxff NULL', 'REAX/C': 'reaxff NULL',
                             'VASHISHTA': 'vashishta'}
         return_string = ''
         if self.options['fftype'].upper() == 'LJ':
