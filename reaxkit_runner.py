@@ -185,8 +185,12 @@ class CobaltObjective:
         self.root, self.bounds, self.targets, self.geometries = root, bounds, targets, geometries
         self.executable, self.timeout = executable, timeout
         self.count = 0
+        self.clock = None
+        self.best_loss = math.inf
 
     def __call__(self, values, template):
+        if self.clock is not None and self.clock.should_stop():
+            raise OptimizationTimeLimit()
         directory = self.root / "evaluations" / f"candidate-{self.count:04d}"
         directory.mkdir(parents=True, exist_ok=False)
         candidate = self.count
@@ -219,18 +223,32 @@ class CobaltObjective:
             write_json(directory / "failure.json", {"error": str(error)})
             raise
         print(f"Candidate {candidate}: {loss:.12g}", flush=True)
+        if loss < self.best_loss:
+            temporary = self.root / "ffield_best.tmp"
+            temporary.write_text(text)
+            temporary.replace(self.root / "ffield_best")
+            self.best_loss = loss
+        if self.clock is not None:
+            self.clock.checkpoint(loss)
         return [loss]
 
 
+class OptimizationTimeLimit(Exception):
+    pass
+
+
 def main(argv=None):
+    from run_budget import Budget
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_config", type=Path)
     parser.add_argument("--acknowledge-cobalt-subset", action="store_true", required=True)
     parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--lammps", default="lmp")
     parser.add_argument("--engine-timeout", type=float, default=60)
+    parser.add_argument("--time-limit-seconds", type=float)
     args = parser.parse_args(argv)
     request, template, bounds, initial, targets, geometries = load_request(args.run_config)
+    clock = None if args.check_only else Budget(request["native_directory"], args.time_limit_seconds)
     executable = shutil.which(args.lammps)
     if not executable or not math.isfinite(args.engine_timeout) or args.engine_timeout <= 0:
         raise ValueError("LAMMPS executable and a positive finite timeout are required")
@@ -257,13 +275,18 @@ def main(argv=None):
     optimizer.read_forcefield_template(str(root / "ffield.template"))
     optimizer.variables.append([initial[name] for name in optimizer.variable_names])
     optimizer.errors.append(objective(initial, template))
+    clock.begin()
+    objective.clock = clock
     previous = Path.cwd()
     try:
         os.chdir(root)
         optimizer.set_algorithm(settings["algorithm"], population_size=settings["population_size"])
         optimizer.parameterize(num_epochs=settings["num_epochs"])
+    except OptimizationTimeLimit:
+        pass
     finally:
         os.chdir(previous)
+    clock.finish()
     return 0
 
 
