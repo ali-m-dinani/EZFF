@@ -1,0 +1,32 @@
+schema_version: 1
+replicas: 1
+optimizers: [ezff]
+seed: null
+output: ./cobalt_ezff_smoke
+job: ./ezff_job.sh
+inputs:
+  ffield: ./ffield_lit
+  params: ./params
+  trainset: ./trainset.in
+  geo: ./geo
+  control: null
+  params_bounds_order: min_max
+scheduler:
+  type: slurm
+  profile: roar_collab
+collection_interval_seconds: 10
+optimizer_settings:
+  ezff:
+    runtime:
+      mode: external_runner
+      command:
+        - /storage/group/acv13/default/Ali/opt_methods/03_all_method_using_reaxkit/envs/ezff/bin/python
+        - -u
+        - /storage/group/acv13/default/Ali/opt_methods/03_all_method_using_reaxkit/EZFF/reaxkit_runner.py
+        - "{run_config}"
+        - --acknowledge-cobalt-subset
+    settings:
+      algorithm: ONEPLUSONE_SO
+      population_size: 2
+      num_epochs: 1
+      num_errors: 1

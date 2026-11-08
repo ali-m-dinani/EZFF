@@ -25,6 +25,10 @@ Code documentation and examples can be found at [ezff.readthedocs.io](https://ez
 Install a Windows LAMMPS build with ReaxFF support, then set `EZFF_LAMMPS_COMMAND` to the full path of `lmp.exe`. Restart your terminal or IDE after setting the user environment variable. EZFF's LAMMPS interface also accepts an explicit executable path through `job.run(command=...)` and the related `run_static`, `run_relax`, and `run_elastic` methods.
 
 ## Requirements
+
+For the explicit cobalt-subset ReaxKit/LAMMPS smoke runner, see
+[the runner guide](docs/reaxkit_cobalt.md). This profile does not fit the full
+common training set and must not be treated as a cross-engine benchmark.
 Uses [xtal](https://github.com/USCCACS/xtal) for handling atomic structures and trajectories.
 Multi-objective optimization is implemented through [Platypus](https://github.com/Project-Platypus/Platypus).
 
